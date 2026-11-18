@@ -116,6 +116,16 @@ class Clective(unittest.TestCase):
         self.assertEqual(self.n.current.buffer.options['filetype'],'c')
     def test_no_recursive_false_include_resolution(self):
         self.assertIsNone(self.n.exec_lua('return require("clective.headers").resolve(require("clective").context(0),"libraries.h","<")'))
+    def test_header_inherits_file_override_over_project_profile(self):
+        self.choose('a');self.choose('b','file');self.cmd('ClectiveOpen')
+        self.assertEqual(self.context()['profile'],'b')
+        self.assertEqual(self.n.current.buffer.name,str(self.sdk2/'platform.h'))
+        self.choose('a');self.assertEqual(self.context()['profile'],'a')
+        self.cmd('ClectiveReset');self.assertEqual(self.context()['root'],str(self.a))
+    def test_real_clangd_switches_source_header(self):
+        header=self.source.with_suffix('.h');header.write_text('int run(void);\n')
+        self.start_lsp();self.cmd('ClectiveSwitch');self.settle(500)
+        self.assertEqual(self.n.current.buffer.name,str(header))
     def test_setup_is_idempotent(self):
         count=self.n.exec_lua('return #vim.api.nvim_get_autocmds({group="Clective"})')
         self.setup();self.assertEqual(self.n.exec_lua('return #vim.api.nvim_get_autocmds({group="Clective"})'),count)
@@ -195,7 +205,7 @@ class Clective(unittest.TestCase):
         if not args.plugins:self.skipTest('pass --plugins for nvim-cmp test')
         self.n.exec_lua('vim.opt.rtp:prepend(...);require("cmp").setup({completion={keyword_length=3},sources={}});require("clective.completion").register()',str(Path(args.plugins)/'nvim-cmp'))
         self.n.api.buf_set_lines(0,0,-1,False,['#include <>']);self.keys('0f>i')
-        self.n.exec_lua('require("cmp").complete()');self.settle(300)
+        self.settle(300)
         labels=self.n.exec_lua('local out={};for _,e in ipairs(require("cmp").get_entries()) do out[#out+1]=e.completion_item.label end;return out')
         self.assertIn('platform.h',labels)
     def test_real_clangd_indexes_unopened_project_file(self):
@@ -208,6 +218,18 @@ class Clective(unittest.TestCase):
             if any(s['name']=='never_opened_function' for s in symbols):found=True;break
         self.assertTrue(found,symbols)
         self.assertEqual(self.n.funcs.bufnr(str(other)),-1)
+    def test_packaged_demo_and_cpp_header_symbols(self):
+        demo=REPO/'examples/demo'
+        self.cmd('luafile '+str(demo/'profile-setup.lua'))
+        self.assertEqual(self.context()['profile'],'demo-a')
+        self.choose('demo-b');self.assertEqual(self.context()['include_dirs'],[str(demo/'sdk-b')])
+        header=demo/'project/shared.h';self.cmd('edit '+str(header))
+        self.assertEqual(self.n.current.buffer.options['filetype'],'c')
+        self.choose('demo-cpp','file');self.assertEqual(self.n.current.buffer.options['filetype'],'cpp')
+        self.start_lsp()
+        symbols=self.request('textDocument/documentSymbol',{'textDocument':{'uri':header.as_uri()}})
+        self.assertTrue(any(s['name']=='demo' for s in symbols),symbols)
+        self.cmd('ClectiveReset!');self.assertEqual(self.n.current.buffer.options['filetype'],'c')
 
 suite=unittest.defaultTestLoader.loadTestsFromNames(remaining or ['__main__.Clective'])
 result=unittest.TextTestRunner(verbosity=2).run(suite)

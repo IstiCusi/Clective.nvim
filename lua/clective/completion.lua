@@ -24,6 +24,13 @@ function M.update(buffer, leaving)
     saved[buffer] = { sources=vim.deepcopy(local_config.sources) }
     local_config.sources = {{name="clective_includes", keyword_length=0}}
     cmp.setup.buffer(local_config)
+    -- Changing sources does not itself trigger cmp. In particular its first
+    -- TextChangedI event in a buffer may only initialize its cursor tracking.
+    vim.schedule(function()
+      if saved[buffer] and vim.api.nvim_get_current_buf() == buffer
+        and vim.fn.mode():sub(1,1) == "i" and config.enabled()
+        and cmp.get_config().completion.autocomplete ~= false then cmp.complete() end
+    end)
   elseif not active and saved[buffer] then
     local local_config = vim.deepcopy(config.buffers[buffer] or {})
     local current = local_config.sources or {}

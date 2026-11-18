@@ -25,7 +25,8 @@ local function resolve(buffer, requested)
   local from = inherited[path]
   local root = requested and requested.root or from and from.root or util.root(path, options.root_markers)
   local file_choice, project_choice = state.get(root, path)
-  local id = file_choice or project_choice or (from and from.profile) or options.default_profile
+  local source_choice = from and from.use_file_override ~= false and state.get(root, from.source) or nil
+  local id = file_choice or source_choice or project_choice or options.default_profile
   if not options.profiles[id] then id = options.default_profile end
   local profile = options.profiles[id]
   local entry = profile.build == "merge" and build.load(path, root, options, from and from.source) or nil
@@ -69,7 +70,8 @@ local function resolve(buffer, requested)
   end
   local context = {
     buffer=buffer, path=path, root=root, profile=id, label=profile.label, language=language,
-    language_origin=language_origin, scope=file_choice and "file" or project_choice and "project" or from and "inherited" or "default",
+    source=from and from.source or path,
+    language_origin=language_origin, scope=file_choice and "file" or source_choice and "inherited" or project_choice and "project" or from and "inherited" or "default",
     command=command, directory=directory, build_file=entry and entry.origin, inferred=entry and entry.inferred or false,
     include_dirs=util.unique(parsed.include_dirs), quote_dirs=util.unique(parsed.quote_dirs),
     system_dirs=util.unique(parsed.system_dirs), after_dirs=util.unique(parsed.after_dirs),
@@ -169,7 +171,10 @@ function M.apply_config(name, scope, buffer)
   local kind = scope == "buffer" or scope == "file"
   state.set(kind and "files" or "projects", kind and context.path or context.root, name)
   -- Selecting a project profile should also remove this file's older override.
-  if not kind then state.set("files", context.path, nil) end
+  if not kind then
+    state.set("files", context.path, nil)
+    if inherited[context.path] then inherited[context.path].use_file_override = false end
+  end
   M.apply(buffer); M.refresh()
   return true
 end
@@ -196,7 +201,7 @@ function M.reset(scope)
   local kind = scope == "buffer"
   state.set(kind and "files" or "projects", kind and context.path or context.root, nil)
   if not kind then state.set("files", context.path, nil) end
-  inherited[context.path] = nil
+  if not kind and inherited[context.path] then inherited[context.path].use_file_override = false end
   M.apply(context.buffer); M.refresh()
 end
 
@@ -214,7 +219,7 @@ function M.open_path(path, source_buffer, split)
   local context = M.context(source_buffer)
   path = util.path(path, context and context.root)
   if context then
-    inherited[path] = {root=context.root, profile=context.profile, language=context.language, source=context.path}
+    inherited[path] = {root=context.root, profile=context.profile, language=context.language, source=context.source}
   end
   vim.cmd((split and "vsplit " or "edit ") .. vim.fn.fnameescape(path))
   contexts[api.nvim_get_current_buf()] = nil
