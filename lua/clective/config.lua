@@ -1,73 +1,50 @@
 local M = {}
-
-
-M.include_configs = {
-["c++-12"] = {
--- C++ Standard-Bibliothek
-"/usr/include/c++/12",
-"/usr/include/c++/12/x86_64-linux-gnu",
-
-
--- GCC Builtins
-"/usr/lib/gcc/x86_64-linux-gnu/12/include",
-
-
--- System-Header: erst Top-Level, danach rekursiv (wird in init.lua umgesetzt)
-"/usr/include",
-"/usr/include/x86_64-linux-gnu",
-
-
--- Lokale Overrides
-"/usr/local/include",
-},
-
-
-["c-12"] = {
--- GCC Builtins
-"/usr/lib/gcc/x86_64-linux-gnu/12/include",
-
-
--- System-Header (Top-Level zuerst)
-"/usr/include",
-"/usr/include/x86_64-linux-gnu",
-
-
--- Lokale Overrides
-"/usr/local/include",
-},
-
-
-["c64"] = {
-"/home/phonon/Development/lang/C64-oscar64/include",
-},
+M.defaults = {
+  default_profile = "project",
+  root_markers = { ".git", "compile_commands.json", "compile_flags.txt", "CMakeLists.txt", "Makefile" },
+  build_dirs = { "build" },
+  state_file = vim.fn.stdpath("state") .. "/clective/state.json",
+  map_gf = true, exclusive_includes = true,
+  clangd = { enabled = true }, max_headers = 20000, max_sources = 5000,
+  profiles = {
+    project = { label = "Project build settings", language = "auto", build = "merge" },
+    ["native-c"] = { label = "Native C", language = "c", compiler = "cc", discover = true },
+    ["native-cpp"] = { label = "Native C++", language = "cpp", compiler = "c++", discover = true },
+  },
 }
-
-
---- Merge user-defined include configurations into the default include table.
---- Replaces existing include lists for any matching keys.
---- @param user_configs table<string, string[]> A table of include configurations,
---- where each key corresponds to a language/toolchain (e.g. "c++-12") and the value
---- is a list of include paths.
-function M.merge(user_configs)
-if not user_configs then return end
-for k, v in pairs(user_configs) do
-M.include_configs[k] = v
+local function strings(value, name)
+  assert(type(value) == "table", name .. " must be a list")
+  for _, item in ipairs(value) do assert(type(item) == "string" and item ~= "", name .. " contains an invalid value") end
 end
+function M.resolve(options)
+  options = options or {}
+  local out = vim.tbl_deep_extend("force", vim.deepcopy(M.defaults), options)
+  out.profiles = vim.deepcopy(M.defaults.profiles)
+  for name, value in pairs(options.profiles or {}) do
+    assert(type(name) == "string" and type(value) == "table", "invalid profile")
+    if value[1] then
+      value = { label = name, language = (name:find("c++", 1, true) or name:find("cpp", 1, true)) and "cpp" or "c",
+        include_dirs = vim.deepcopy(value), build = "merge" }
+    end
+    out.profiles[name] = vim.deepcopy(value)
+  end
+  for name, p in pairs(out.profiles) do
+    p.label, p.language, p.build = p.label or name, p.language or "auto", p.build or "merge"
+    assert(p.language == "c" or p.language == "cpp" or p.language == "auto", "invalid language in " .. name)
+    assert(p.build == "merge" or p.build == "ignore", "invalid build policy in " .. name)
+    for _, key in ipairs({ "include_dirs", "quote_dirs", "system_dirs", "defines", "flags", "compiler_args" }) do
+      p[key] = p[key] or {}; strings(p[key], name .. "." .. key)
+    end
+    for _, key in ipairs({ "compiler", "standard", "target", "sysroot" }) do
+      assert(p[key] == nil or type(p[key]) == "string", "invalid " .. key .. " in " .. name)
+    end
+    if p.discover then assert(p.compiler, "compiler discovery requires an explicit compiler: " .. name) end
+  end
+  assert(out.profiles[out.default_profile], "default_profile is unknown")
+  assert(type(out.max_headers) == "number" and out.max_headers > 0, "max_headers must be positive")
+  assert(type(out.max_sources) == "number" and out.max_sources > 0, "max_sources must be positive")
+  strings(out.root_markers, "root_markers"); strings(out.build_dirs, "build_dirs")
+  assert(type(out.state_file) == "string" and out.state_file ~= "", "state_file must be a path")
+  return out
 end
-
-
---- Appends additional include paths to the existing list for a given configuration key.
---- If the key does not exist, it initializes a new include list.
---- The provided includes are appended to the end of the existing list.
---- @param key string The configuration key (e.g. "c++-12", "c64").
---- @param new_includes string[] A list of include paths to append.
-function M.append_includes(key, new_includes)
-if type(new_includes) ~= "table" then return end
-if M.include_configs[key] == nil then
-M.include_configs[key] = {}
-end
-vim.list_extend(M.include_configs[key], new_includes)
-end
-
-
 return M
