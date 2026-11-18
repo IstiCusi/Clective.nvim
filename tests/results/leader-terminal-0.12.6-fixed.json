@@ -1,0 +1,18 @@
+{
+  "version": "0.12.6",
+  "before_fix": false,
+  "interface": "real PTY; passive timer observation",
+  "passed": true,
+  "steps": [
+    "Open real HotZig source in Docpair, remain left",
+    "Fixed: Space menu opens after delayed LSP without focus change",
+    "Slow Space f f opens and closes Telescope from left",
+    "Space menu works after language-server stop",
+    "Space menu works after language-server restart",
+    "Both panes retain menus after focus changes",
+    "Source cursor moves retain menu",
+    "Second Zig buffer with delayed server has a menu",
+    "Space Shift-Tab and Space Tab switch buffers with working menus",
+    "Tab and Shift-Tab switch tabs with working menus"
+  ]
+}
