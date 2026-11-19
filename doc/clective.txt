@@ -1,7 +1,8 @@
 *clective.txt*  Language and SDK profiles for C/C++         *clective*
 
 Clective requires Neovim 0.11+. Full documentation: README.md.
-The phonon installation guide is INSTALL_DE.md in the update archive.
+Installation: https://github.com/IstiCusi/Clective.nvim
+Full Lazy example: examples/lazy.lua. Migration guide: MIGRATING.md.
 
 COMMANDS                                               *clective-commands*
 
@@ -31,7 +32,7 @@ CONFIGURATION                                          *clective-setup*
   })
 <
 No leader keys are defined by the core plugin. Configure them in Lazy.
-The supplied integration uses Space K c (uppercase K) for project profiles.
+The supplied Lazy example uses Space K c (uppercase K) for project profiles.
 
 LANGUAGE                                               *clective-language*
 

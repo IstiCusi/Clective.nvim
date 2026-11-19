@@ -2,3 +2,8 @@ state.json
 __pycache__/
 *.pyc
 .cache/
+.venv/
+.test-tools/
+tests/results/
+*.swp
+*.swo

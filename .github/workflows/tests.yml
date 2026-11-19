@@ -1,0 +1,53 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        neovim: ["0.11.5", "0.12.6"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Install test tools
+        env:
+          NVIM_VERSION: ${{ matrix.neovim }}
+        run: |
+          set -euo pipefail
+          mkdir -p .test-tools/plugins
+          curl --fail --location --retry 3 "https://github.com/neovim/neovim/releases/download/v${NVIM_VERSION}/nvim-linux-x86_64.tar.gz" -o .test-tools/nvim.tar.gz
+          tar -xzf .test-tools/nvim.tar.gz -C .test-tools
+          curl --fail --location --retry 3 "https://github.com/clangd/clangd/releases/download/19.1.2/clangd-linux-19.1.2.zip" -o .test-tools/clangd.zip
+          unzip -q .test-tools/clangd.zip -d .test-tools
+          git init -q .test-tools/plugins/nvim-cmp
+          git -C .test-tools/plugins/nvim-cmp remote add origin https://github.com/hrsh7th/nvim-cmp.git
+          git -C .test-tools/plugins/nvim-cmp fetch --depth=1 origin fe29aba4117227a6df637bc41e4b4fb4e98864a0
+          git -C .test-tools/plugins/nvim-cmp checkout --detach FETCH_HEAD
+          git init -q .test-tools/plugins/lazy.nvim
+          git -C .test-tools/plugins/lazy.nvim remote add origin https://github.com/folke/lazy.nvim.git
+          git -C .test-tools/plugins/lazy.nvim fetch --depth=1 origin 306a05526ada86a7b30af95c5cc81ffba93fef97
+          git -C .test-tools/plugins/lazy.nvim checkout --detach FETCH_HEAD
+          python -m pip install -r tests/requirements.txt
+      - name: Regression tests
+        run: |
+          python tests/run.py --nvim .test-tools/nvim-linux-x86_64/bin/nvim --clangd .test-tools/clangd_19.1.2/bin/clangd --plugins .test-tools/plugins
+      - name: Package installation tests
+        run: |
+          python tests/package.py --nvim .test-tools/nvim-linux-x86_64/bin/nvim --clangd .test-tools/clangd_19.1.2/bin/clangd --plugins .test-tools/plugins

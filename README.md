@@ -1,12 +1,13 @@
-# clective.nvim
+# Clective.nvim
 
 Clective connects a C/C++ language context with a named set of SDK include
 directories. Choose **Amiga C**, **Amiga NDK 3.5**, **C64/Oscar64**, or a native
 C/C++ profile once, and use that context for include completion, header
 navigation, the status line, and the existing clangd language server.
 
-This is the local development version. It is not published to GitHub yet.
-For the supplied phonon configuration, start with [INSTALL_DE.md](INSTALL_DE.md).
+Repository: [IstiCusi/Clective.nvim](https://github.com/IstiCusi/Clective.nvim).
+Native profiles are built in; SDK profiles point to your own SDK installations.
+No SDK, compiler or language-server binary is bundled.
 
 ## What changes when you select a profile?
 
@@ -40,16 +41,17 @@ actual build compiler**. It configures editing and analysis.
 - GCC or Clang only when an explicitly configured native compiler is queried
   for its default include paths.
 
-Python is needed only by the supplied installer/tests, not by the plugin.
+Python is needed only to run the development tests, not to install or use the plugin.
 
-## Local installation with lazy.nvim
+## Install with lazy.nvim
 
-Copy this repository's `lua/` and `plugin/` directories into
-`~/.config/nvim/scripts/clective/`, then add a Lazy specification:
+Add this specification to your Neovim configuration, for example in
+`lua/plugins/clective.lua`. Your existing clangd and nvim-cmp configuration
+continues to supply semantic completion and completion key bindings.
 
 ```lua
 return {
-  dir = vim.fn.stdpath("config") .. "/scripts/clective",
+  "IstiCusi/Clective.nvim",
   name = "clective",
   main = "clective",
   lazy = false,
@@ -67,18 +69,61 @@ return {
         language = "c",
         build = "ignore",
         system_headers = false,
-        include_dirs = { "~/Development/codesnips/amiga/include" },
+        include_dirs = { "~/SDKs/amiga/include" }, -- change to your SDK path
       },
     },
   },
 }
 ```
 
-The complete specification for the supplied Neovim setup, including all
-existing SDK locations, is in
-[`integration/phonon/lua/plugins/clective.lua`](integration/phonon/lua/plugins/clective.lua).
-It uses `opts` once; the plugin loader does not overwrite that setup.
-The core plugin defines no leader mappings. The Lazy specification defines them.
+Remove the example Amiga profile if you do not use that SDK. The built-in
+`project`, `native-c` and `native-cpp` profiles remain available.
+
+See [examples/lazy.lua](examples/lazy.lua) for a complete starter specification
+with optional key bindings. Set your preferred `vim.g.mapleader` before
+`require("lazy").setup(...)`; Clective does not change the leader.
+Keep `main = "clective"` because the Lua module name is lowercase.
+The core plugin defines no leader mappings.
+
+If clangd is not configured yet, [examples/clangd.lua](examples/clangd.lua)
+contains a minimal Neovim 0.11+ configuration. Use your existing LSP setup when
+you already have one. Clective configures an attached server, so installing
+only this plugin does not start clangd.
+
+For a plain Neovim package installation:
+
+```sh
+git clone https://github.com/IstiCusi/Clective.nvim.git \
+  "${XDG_DATA_HOME:-$HOME/.local/share}/nvim/site/pack/plugins/start/Clective.nvim"
+```
+
+The package loader supplies defaults. To configure SDKs, call
+`require("clective").setup({ profiles = { ... } })` from your init.lua.
+nvim-cmp remains optional; remove its dependency if you only need commands,
+header navigation, status integration and clangd synchronization.
+
+Coming from the old local script? See [MIGRATING.md](MIGRATING.md).
+
+## First use
+
+1. Open a C/C++ file and run `:ClectiveProfile`.
+2. Choose the project's build settings, a native compiler profile or your SDK.
+3. Use `:ClectiveInfo` to inspect the project root, paths and clangd command.
+4. Type an include such as `#include <exec/`, or use `:ClectiveHeaders`.
+
+With the key bindings in examples/lazy.lua and a Space leader:
+
+| Shortcut | Action |
+| --- | --- |
+| Space K c | Project profile |
+| Space K b | File profile override |
+| Space K i | Effective settings |
+| Space K h | Find a header |
+| Space K s | Switch source/header |
+| Space K r | Refresh paths |
+| Space K p | Index project sources |
+
+`K` is uppercase. These bindings are examples; all commands also work directly.
 
 ## Profile settings
 
@@ -128,7 +173,7 @@ directory being typed; it does not recursively invent shorter include names.
 
 The built-in profiles are `project`, `native-c` and `native-cpp`. A user profile
 with the same ID replaces that profile in full. Native profiles query `cc` or
-`c++`; the supplied phonon integration explicitly uses `gcc` and `g++`.
+`c++`; you can explicitly configure `gcc`, `g++`, `clang` or `clang++`.
 
 Old list-only profiles are accepted for migration, but they cannot describe all
 language and compiler settings. Use the structured form for new profiles.
@@ -194,6 +239,11 @@ State is stored under `stdpath("state") .. "/clective/state.json"`. You can
 override `state_file`. Switching to a buffer in a different project applies
 that project's selection. Updates use atomic file replacement; concurrent
 Neovim processes can still race if both write at precisely the same time.
+
+Opening a file does not create a saved file entry. Only explicit selections
+are stored: one entry per selected project, plus any file overrides. These
+are profile IDs, not copies of all include paths. Entries for renamed or
+deleted files are not pruned in this version.
 
 Headers opened with Clective retain the source project's context even outside
 its root. One Neovim buffer for a shared SDK header can only hold one context:
@@ -314,15 +364,17 @@ Use `scope="file"` or `"buffer"` with `apply_config`; the interactive
 - Macro-generated includes, multiline include directives and all preprocessor
   conditional states are not resolved by the filename completion source.
 - Target-specific Amiga/Oscar64 behavior still requires tests with the real SDKs.
-- The supplied installer is specific to the provided phonon configuration.
-  Other configurations should use the generic Lazy specification above.
+- Root detection uses the nearest configured marker and a working-directory
+  fallback; explicit persistent workspace roots are not implemented yet.
 
 ## Tests and design references
 
 ```sh
-python3 -m pip install pynvim
+python3 -m venv .venv
+. .venv/bin/activate
+python3 -m pip install -r tests/requirements.txt
 python3 tests/run.py --nvim /path/to/nvim --clangd /path/to/clangd --plugins /path/to/plugins
-python3 tests/install_test.py
+python3 tests/package.py --nvim /path/to/nvim --plugins /path/to/plugins
 ```
 
 The first suite launches real Neovim processes. clangd tests exercise SDK
@@ -330,5 +382,19 @@ definition changes, symbols from unopened files, document symbols and
 source/header switching. The cmp tests use the real nvim-cmp dependency.
 Without optional arguments those integrations are reported as skipped.
 
-See [TEST_REPORT.md](TEST_REPORT.md) for the delivered run results and
-[RESEARCH.md](RESEARCH.md) for the primary sources behind the design.
+The plugins directory used by tests contains nvim-cmp and, for the package
+tests, lazy.nvim. CI downloads pinned versions and tests both supported
+Neovim release lines. See [CONTRIBUTING.md](CONTRIBUTING.md) for details and
+[RESEARCH.md](RESEARCH.md) for the design references.
+
+## Runnable example
+
+[examples/demo](examples/demo) contains a C project and two tiny test SDKs.
+In Neovim, run `:luafile /absolute/path/to/Clective.nvim/examples/demo/profile-setup.lua`.
+Switch between Demo SDK A and B, then use your LSP definition mapping on
+`platform_value`: its definition should move between the two SDK directories.
+See [examples/demo/README.md](examples/demo/README.md) for the remaining checks.
+
+## License
+
+[MIT](LICENSE). Copyright 2026 Stephan Strauss.

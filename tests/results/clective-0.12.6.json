@@ -1,9 +1,0 @@
-{
-  "tests": 28,
-  "failures": [],
-  "errors": [],
-  "skipped": [],
-  "nvim": "/workspace/scratch/4e8e994a459c/toolchain/0.12.6/nvim-linux-x86_64/bin/nvim",
-  "clangd": "/workspace/scratch/4e8e994a459c/toolchain/clangd-19.1.2/clangd_19.1.2/bin/clangd",
-  "passed": true
-}
