@@ -87,6 +87,20 @@ class Clective(unittest.TestCase):
         self.assertEqual(state['projects'][str(self.a)],'b')
         self.setup();self.assertEqual(self.context()['profile'],'b')
         self.assertFalse((REPO/'state.json').exists())
+    def test_file_profile_survives_a_new_neovim_process(self):
+        self.choose('b','file')
+        try:self.n.command('qa!')
+        except (EOFError,OSError):pass
+        self.n.close()
+        self.n=pynvim.attach('child',argv=['env','XDG_STATE_HOME='+str(self.root/'state'),
+            args.nvim,'--embed','--headless','-u','NONE','-i','NONE','-n'])
+        self.n.ui_attach(180,50,rgb=True)
+        self.n.exec_lua('vim.opt.rtp:prepend(...);vim.cmd("filetype on");vim.opt.hidden=true;_G.messages={};vim.notify=function(m,l) table.insert(messages,{text=tostring(m),level=l or 2}) end',str(REPO))
+        self.cmd('cd '+str(self.root));self.setup();self.cmd('edit '+str(self.source))
+        self.assertEqual(self.context()['profile'],'b')
+        self.assertEqual(self.context()['scope'],'file')
+        other=self.a/'another.c';other.write_text('int another;\n')
+        self.cmd('edit '+str(other));self.assertEqual(self.context()['profile'],'a')
     def test_cpp_source_extensions_and_h_context(self):
         for ext in ['cc','cxx','cpp','hpp','hh','hxx']:
             file=self.a/('sample.'+ext);file.write_text('int value;\n')
@@ -206,6 +220,12 @@ class Clective(unittest.TestCase):
         self.n.exec_lua('vim.opt.rtp:prepend(...);require("cmp").setup({completion={keyword_length=3},sources={}});require("clective.completion").register()',str(Path(args.plugins)/'nvim-cmp'))
         self.n.api.buf_set_lines(0,0,-1,False,['#include <>']);self.keys('0f>i')
         self.settle(300)
+        labels=self.n.exec_lua('local out={};for _,e in ipairs(require("cmp").get_entries()) do out[#out+1]=e.completion_item.label end;return out')
+        self.assertIn('platform.h',labels)
+    def test_cmp_loaded_after_clective_registers_on_insert(self):
+        if not args.plugins:self.skipTest('pass --plugins for nvim-cmp test')
+        self.n.exec_lua('vim.opt.rtp:prepend(...);require("cmp").setup({sources={}})',str(Path(args.plugins)/'nvim-cmp'))
+        self.n.api.buf_set_lines(0,0,-1,False,['#include <>']);self.keys('0f>i');self.settle(300)
         labels=self.n.exec_lua('local out={};for _,e in ipairs(require("cmp").get_entries()) do out[#out+1]=e.completion_item.label end;return out')
         self.assertIn('platform.h',labels)
     def test_real_clangd_indexes_unopened_project_file(self):

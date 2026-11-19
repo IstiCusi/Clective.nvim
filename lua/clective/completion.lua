@@ -11,6 +11,7 @@ end
 function M.update(buffer, leaving)
   local cmp = package.loaded.cmp
   if not cmp or buffer ~= vim.api.nvim_get_current_buf() then return end
+  if not registered then M.register() end
   -- cmp.setup.buffer replaces the whole local table. Preserve all unrelated
   -- settings and preserve inheritance when the buffer has no local sources.
   local ok, config = pcall(require, "cmp.config")
